@@ -1,0 +1,94 @@
+# -*- coding: utf-8 -*-
+import warnings
+warnings.simplefilter('ignore')
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+import nltk
+nltk.download('stopwords')
+nltk.download('punkt')
+from nltk.corpus import stopwords 
+from nltk.tokenize import word_tokenize
+import re
+
+
+
+
+# Load EDA Pkgs
+# import pandas as pd
+#pip install neattext
+import neattext.functions as nfx
+# Load ML/Rc Pkgs
+from sklearn.feature_extraction.text import CountVectorizer,TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity,linear_kernel
+
+
+
+
+def recomendation_system(survey,num_of_rec):
+  df_uoft = pd.read_csv('C:/Users/anchi/Desktop/MIE 1624/project/final data/course_UOFT_2.csv')
+  df_uoft['clean_course_des'] = df_uoft['Course_Description'].apply(nfx.remove_stopwords)
+  df_uoft['clean_course_des'] = df_uoft['Course_Description'].apply(nfx.remove_special_characters)
+  count_vect = CountVectorizer()
+  cv_mat = count_vect.fit_transform(df_uoft['clean_course_des'])
+  cosine_sin_mat = cosine_similarity(cv_mat)
+  course_indices = pd.Series(df_uoft.index,index=df_uoft['Course_ID']).drop_duplicates()
+  Course_Description_cl = []
+  for n in range(len(df_uoft)):
+    text = df_uoft['Course_Description'][n]
+    text1 = re.sub(r'<[^>]+>|^RT|^b"|\ {2,}|http\S+|@\S+|[^\w\s]|[^a-zA-Z ]+','',text)
+    stop_words = set(stopwords.words('english'))
+    word_tokens = word_tokenize(text1)
+    filtered_sentence = [w for w in word_tokens if not w in stop_words]
+    Course_Description_cl.append(''.join(filtered_sentence))
+
+  df_uoft.insert(1,column="Descriptions_cleaned",value=Course_Description_cl)
+  courses = ''
+  rl_list = []
+  course_list1 = []
+  for i in range(len(df_uoft)):
+    rl = 0
+    courses = df_uoft['Course_ID'][i]
+    course_list = df_uoft['Descriptions_cleaned'][i].lower().split()
+    for x in course_list:
+      for y in survey:
+        if (x==y):
+          rl += 1
+    course_list1.append(courses)
+    rl_list.append(rl)
+  
+  df_courses = pd.DataFrame(course_list1,columns=['courses'])
+  df_score = pd.DataFrame(rl_list, columns=['scores'])
+  df_test = pd.concat([df_courses,df_score],axis=1)
+  df_test.sort_values('scores',ascending=False,inplace=True)
+  course_sel = df_test.iloc[0]['courses']
+  idx = course_indices[course_sel]
+  scores = list(enumerate(cosine_sin_mat[idx]))
+  sorted_scores = sorted(scores,key=lambda x:x[1],reverse=True)
+  selected_course_indices = [i[0] for i in sorted_scores[1:]]
+  selected_course_scores = [i[1] for i in sorted_scores[1:]]
+  result = df_uoft['Course_Name'].iloc[selected_course_indices]
+  rec_df = pd.DataFrame(result)
+  rec_df['similarity_scores'] = selected_course_scores
+  print(rec_df.head(num_of_rec))
+  return
+
+survey = []
+keyword=input("In what kind of area you wish that you could work on? (examples: data, ai, machine, cloud...)")
+survey.append(keyword.lower())
+
+keyword=input("In what area would you like to apply your data analytics skill to? (examples: health,transport,finance,sports....)")
+survey.append(keyword.lower())
+
+keyword=input("What kind of technical skill do you wish to imporve? (examples: analysis,mathematical,statistical, network, programming... )")
+survey.append(keyword.lower())
+
+keyword=input("What kind of soft skill you think you are good at? (examples: teamwork,decisionmaking,solving... )")
+survey.append(keyword.lower())
+
+keyword=input("What programming languge you prefer to use? (examples: java, python,C, C++...)")
+survey.append(keyword.lower())
+
+
+recomendation_system(survey,10)
